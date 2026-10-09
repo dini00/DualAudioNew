@@ -1,35 +1,54 @@
-name: Build Dual Audio APK
+name: Build DualAudioNew APK
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'DualAudioNew_AndroidStudio_Project.zip'
+      - '.github/workflows/main.yml'
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Extract project ZIP
-        run: |
-          unzip -o DualAudioNew_AndroidStudio_Project.zip -d project
-          find project -type f -name gradlew -exec chmod +x {} \;
-
-      - uses: actions/setup-java@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      - name: Extract Android project
+        run: |
+          mkdir project
+          unzip -o DualAudioNew_AndroidStudio_Project.zip -d project
+          echo "Extracted project files:"
+          find project -name settings.gradle.kts -o -name settings.gradle
+
       - name: Build APK
         run: |
-          cd project
-          PROJECT_DIR=$(find . -name settings.gradle.kts -not -path '*/.gradle/*' -printf '%h\n' | head -n 1)
+          PROJECT_DIR=$(dirname "$(find project -name settings.gradle.kts -o -name settings.gradle | head -n 1)")
+          if [ -z "$PROJECT_DIR" ] || [ "$PROJECT_DIR" = "project" ]; then
+            echo "Android project settings file not found in ZIP."
+            exit 1
+          fi
           cd "$PROJECT_DIR"
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          if [ -f ./gradlew ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug
+          else
+            sudo apt-get update
+            sudo apt-get install -y gradle
+            gradle assembleDebug
+          fi
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
         with:
-          name: DualAudio-APK
+          name: DualAudioNew-APK
           path: project/**/build/outputs/apk/debug/*.apk
           if-no-files-found: error
