@@ -3,9 +3,8 @@ name: Build DualAudioNew APK
 on:
   workflow_dispatch:
   push:
-    paths:
-      - 'DualAudioNew_AndroidStudio_Project.zip'
-      - '.github/workflows/main.yml'
+    branches:
+      - main
 
 jobs:
   build:
@@ -15,51 +14,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Extract project
+      - name: Extract Android project
         run: |
-          mkdir project
           unzip -o DualAudioNew_AndroidStudio_Project.zip -d project
-          find project -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \)
+          ls -la project/DualAudioNew
+          ls -la project/DualAudioNew/app
 
-      - name: Build Android APK
+      - name: Install Gradle
         run: |
-          SETTINGS=$(find project -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) | head -n 1)
+          curl -L --fail https://services.gradle.org/distributions/gradle-8.7-bin.zip -o gradle.zip
+          unzip -q gradle.zip
+          echo "$PWD/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-          if [ -z "$SETTINGS" ]; then
-            echo "ERROR: Android project settings file not found."
-            exit 1
-          fi
-
-          ROOT=$(dirname "$SETTINGS")
-          echo "Project root: $ROOT"
-          find "$ROOT" -maxdepth 3 -type f | head -100
-
-          cd "$ROOT"
-
-          if [ -f app/build.gradle.kts ] || [ -f app/build.gradle ]; then
-            if [ -f gradlew ]; then
-              chmod +x gradlew
-              ./gradlew :app:assembleDebug
-            else
-              sudo apt-get update
-              sudo apt-get install -y gradle
-              gradle :app:assembleDebug
-            fi
-          else
-            echo "ERROR: Android app module not found."
-            exit 1
-          fi
+      - name: Build APK
+        run: |
+          cd project/DualAudioNew
+          gradle --no-daemon :app:assembleDebug
 
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: DualAudioNew-APK
-          path: project/**/build/outputs/apk/debug/*.apk
+          path: project/DualAudioNew/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
